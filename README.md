@@ -94,7 +94,7 @@ The raw external measurement datasets are not redistributed here. See `DATA_SOUR
 
 ## License
 
-No public license has been selected in this package. See `LICENSE_PENDING.md` before making the repository public.
+No public reuse license has been selected for this package yet. See `LICENSE_PENDING.md`.
 
 ## Citation
 
