@@ -35,7 +35,7 @@ tests/
   test_public_trace_smoke.py
 DATA_SOURCES.md
 CITATION.cff
-LICENSE_PENDING.md
+LICENSE
 ```
 
 ## Requirements
@@ -94,8 +94,4 @@ The raw external measurement datasets are not redistributed here. See `DATA_SOUR
 
 ## License
 
-No public reuse license has been selected for this package yet. See `LICENSE_PENDING.md`.
-
-## Citation
-
-See `CITATION.cff`.
+The source code in this repository is released under the MIT License. The result tables and documentation are additionally available un
