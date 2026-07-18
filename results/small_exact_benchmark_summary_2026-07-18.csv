@@ -1,0 +1,10 @@
+planner,scenarios,mean_time_s,mean_max_blackout_s,violations_over_90s,exact_matches,mean_feasible_time_gap_pct,mean_blackout_gap_s,max_blackout_gap_s,max_violation_over_budget_s
+exact_bounded,12,592.841,65.574,0,12,0.0,0.0,0.0,0.0
+bounded_blackout,12,629.555,65.074,0,3,5.867,-0.5,20.839,0.0
+protocol_aware,12,628.237,76.269,3,2,4.814,10.694,44.755,21.902
+genetic_algorithm,12,630.896,75.218,3,2,5.478,9.644,42.755,21.902
+particle_swarm,12,627.979,74.744,3,1,5.095,9.17,44.755,21.902
+ga_blackout,12,671.168,66.135,0,1,13.349,0.561,32.29,0.0
+pso_blackout,12,645.779,63.507,1,2,8.689,-2.068,22.218,13.041
+distance_only,12,921.065,154.028,10,0,24.024,88.453,169.885,139.334
+ordinary_collection,12,951.462,159.179,11,0,39.489,93.604,174.342,141.607

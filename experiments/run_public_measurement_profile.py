@@ -16,7 +16,6 @@ from experiments.experiment_utils import markdown_table, write_csv
 from uav_protocol_planning.metrics import route_temporal_metrics
 from uav_protocol_planning.planners import (
     average_gap_route,
-    blackout_focused_route,
     bounded_blackout_route,
     distance_only_route,
     freshness_focused_route,
@@ -27,18 +26,18 @@ from uav_protocol_planning.planners import (
     soft_blackout_penalty_route,
 )
 from uav_protocol_planning.scenarios import (
-    build_public_trace_calibrated_protocols,
+    build_public_measurement_informed_protocols,
     build_random_scenario,
 )
 from uav_protocol_planning.simulation import simulate_route
 
 
-REPORT_DATE = "2026-07-04"
+REPORT_DATE = "2026-07-18"
 SCENARIO_SEEDS = tuple(range(101, 151))
-PROFILE_VARIANT = "public_trace_calibrated"
+PROFILE_VARIANT = "public_measurement_informed"
 
 
-CALIBRATION_NOTES = {
+EVIDENCE_NOTES = {
     "LoRa": (
         "Real-UAV LoRa/LoRaWAN public measurements for range, edge reliability, "
         "and aerial link variability; packet-capture LoRaWAN studies for "
@@ -60,11 +59,11 @@ CALIBRATION_NOTES = {
 }
 
 
-CALIBRATION_STATUS = {
-    "LoRa": "public real-UAV trace calibrated",
-    "ZigBee": "public real-UAV trace calibrated",
-    "BLE": "ground measurement / standard derived",
-    "WiFi": "local bench / standard derived",
+EVIDENCE_STATUS = {
+    "LoRa": "public aerial measurement informed",
+    "ZigBee": "public aerial measurement informed",
+    "BLE": "measurement and standard informed",
+    "WiFi": "bench and standard informed",
 }
 
 
@@ -81,7 +80,7 @@ def _std(values: list[float]) -> float:
 
 def protocol_profile_rows() -> list[dict[str, object]]:
     rows = []
-    for profile in build_public_trace_calibrated_protocols().values():
+    for profile in build_public_measurement_informed_protocols().values():
         rows.append(
             {
                 "protocol": profile.name,
@@ -89,12 +88,12 @@ def protocol_profile_rows() -> list[dict[str, object]]:
                 "rate_kbps": profile.data_rate_kbps,
                 "setup_s": profile.connection_setup_s,
                 "reconnect_s": profile.reconnect_penalty_s,
-                "disconnect_threshold_s": profile.disconnect_threshold_s,
+                "recovery_threshold_s": profile.recovery_threshold_s,
                 "cycle_window_s": f"{profile.sleep_cycle_s:g}/{profile.awake_window_s:g}",
                 "edge_loss": profile.packet_loss_at_edge,
                 "switch_s": profile.switch_penalty_s,
-                "calibration_status": CALIBRATION_STATUS[profile.name],
-                "calibration_note": CALIBRATION_NOTES[profile.name],
+                "evidence_status": EVIDENCE_STATUS[profile.name],
+                "evidence_note": EVIDENCE_NOTES[profile.name],
             }
         )
     return rows
@@ -113,7 +112,7 @@ def _main_route_with_runtime(
     elif planner_name == "protocol_aware":
         route = protocol_aware_route(scenario, blackout_weight=0.0)
     elif planner_name == "bounded_blackout":
-        route = blackout_focused_route(scenario)
+        route = bounded_blackout_route(scenario, budget=90.0)
     elif planner_name == "genetic_algorithm":
         route = genetic_algorithm_route(
             scenario,
@@ -194,6 +193,7 @@ def run_main_suite() -> list[dict[str, object]]:
                     "flight_distance_m": round(result.flight_distance_m, 3),
                     "max_blackout_s": round(result.max_blackout_s, 3),
                     "meets_90s_budget": int(result.max_blackout_s <= 90.0 + 1e-6),
+                    "mission_feasible": int(result.mission_feasible),
                     "wait_time_s": round(result.wait_time_s, 3),
                     "service_time_s": round(result.service_time_s, 3),
                     "protocol_switches": result.protocol_switches,
@@ -238,6 +238,7 @@ def run_metric_suite() -> list[dict[str, object]]:
                         temporal.mean_collection_completion_s, 3
                     ),
                     "meets_90s_budget": int(result.max_blackout_s <= 90.0 + 1e-6),
+                    "mission_feasible": int(result.mission_feasible),
                     "runtime_ms": round(runtime_ms, 3),
                     "route": " -> ".join(route),
                 }
@@ -259,6 +260,14 @@ def summarize(rows: list[dict[str, object]], keys: tuple[str, ...]) -> list[dict
             item["budget_violations"] = sum(
                 1 - int(row["meets_90s_budget"]) for row in group
             )
+        if "mission_feasible" in group[0]:
+            item["endurance_violations"] = sum(
+                1 - int(row["mission_feasible"]) for row in group
+            )
+            item["joint_violations"] = sum(
+                not int(row["meets_90s_budget"]) or not int(row["mission_feasible"])
+                for row in group
+            )
         for key in keys:
             values = [float(row[key]) for row in group]
             item[f"{key}_mean"] = round(_mean(values), 3)
@@ -275,11 +284,11 @@ def write_markdown(
     path: Path,
 ) -> None:
     lines = [
-        f"# Public measurement-trace calibrated profile rerun - {REPORT_DATE}",
+        f"# Public-measurement-informed profile rerun - {REPORT_DATE}",
         "",
-        "This check keeps the scenario generator, node count, seeds, and routers fixed, but replaces the reference protocol profile with a public measurement-trace calibrated profile. It is not a closed-loop UAV deployment experiment. Public real-UAV traces are used for the LoRa and ZigBee-class radio envelope; BLE and WiFi fields remain grounded in ground/bench measurements and standards.",
+        "This check keeps the scenario generator, node count, seeds, and routers fixed while replacing the reference protocol profile with an envelope informed by public aerial measurements, ground measurements, standards, and the local service-time check.",
         "",
-        "## Calibrated protocol profile",
+        "## Measurement-informed protocol profile",
         "",
         *markdown_table(
             profile_rows,
@@ -289,18 +298,18 @@ def write_markdown(
                 ("Rate", "rate_kbps"),
                 ("Setup", "setup_s"),
                 ("Reconnect", "reconnect_s"),
-                ("Disc.", "disconnect_threshold_s"),
+                ("Recovery", "recovery_threshold_s"),
                 ("Cycle/window", "cycle_window_s"),
                 ("Edge loss", "edge_loss"),
-                ("Status", "calibration_status"),
+                ("Status", "evidence_status"),
             ],
         ),
         "",
-        "## Calibration notes",
+        "## Evidence mapping notes",
         "",
     ]
     for row in profile_rows:
-        lines.append(f"- {row['protocol']}: {row['calibration_note']}")
+        lines.append(f"- {row['protocol']}: {row['evidence_note']}")
     lines.extend(
         [
             "",
@@ -315,6 +324,8 @@ def write_markdown(
                     ("Max blackout mean", "max_blackout_s_mean"),
                     ("Max blackout std", "max_blackout_s_std"),
                     ("90s violations", "budget_violations"),
+                    ("Endurance violations", "endurance_violations"),
+                    ("Joint violations", "joint_violations"),
                     ("Runtime mean ms", "runtime_ms_mean"),
                 ],
             ),
@@ -331,10 +342,12 @@ def write_markdown(
                     ("Mean gap mean", "mean_gap_s_mean"),
                     ("Mean completion mean", "mean_collection_completion_s_mean"),
                     ("90s violations", "budget_violations"),
+                    ("Endurance violations", "endurance_violations"),
+                    ("Joint violations", "joint_violations"),
                 ],
             ),
             "",
-            "Reading: this check should be interpreted as public measurement-trace calibration of scheduler inputs, not as closed-loop real-UAV validation of the route controller.",
+            "Reading: the rerun tests whether the route ordering persists under an externally informed protocol envelope while keeping the evaluator and scenario distribution fixed.",
         ]
     )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -373,32 +386,32 @@ def main() -> None:
 
     write_csv(
         profile_rows,
-        results_dir / f"public_trace_profile_table_{REPORT_DATE}.csv",
+        results_dir / f"public_measurement_profile_table_{REPORT_DATE}.csv",
     )
     write_csv(
         main_rows,
-        results_dir / f"public_trace_multiscenario_raw_{REPORT_DATE}.csv",
+        results_dir / f"public_measurement_multiscenario_raw_{REPORT_DATE}.csv",
     )
     write_csv(
         main_summary,
-        results_dir / f"public_trace_multiscenario_summary_{REPORT_DATE}.csv",
+        results_dir / f"public_measurement_multiscenario_summary_{REPORT_DATE}.csv",
     )
     write_csv(
         metric_rows,
-        results_dir / f"public_trace_metric_checks_raw_{REPORT_DATE}.csv",
+        results_dir / f"public_measurement_metric_checks_raw_{REPORT_DATE}.csv",
     )
     write_csv(
         metric_summary,
-        results_dir / f"public_trace_metric_checks_summary_{REPORT_DATE}.csv",
+        results_dir / f"public_measurement_metric_checks_summary_{REPORT_DATE}.csv",
     )
     write_markdown(
         profile_rows,
         main_summary,
         metric_summary,
-        results_dir / f"public_trace_calibration_{REPORT_DATE}.md",
+        results_dir / f"public_measurement_profile_check_{REPORT_DATE}.md",
     )
 
-    print(f"Wrote public measurement-trace calibration outputs for {REPORT_DATE}.")
+    print(f"Wrote public-measurement-informed profile outputs for {REPORT_DATE}.")
 
 
 if __name__ == "__main__":

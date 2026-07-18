@@ -6,7 +6,7 @@ from typing import Iterable
 
 from uav_protocol_planning.models import Scenario
 from uav_protocol_planning.planners import (
-    blackout_focused_route,
+    bounded_blackout_route,
     distance_only_route,
     genetic_algorithm_route,
     ordinary_data_collection_route,
@@ -22,12 +22,16 @@ def planner_routes(
     ga_generations: int = 70,
     pso_swarm_size: int = 28,
     pso_iterations: int = 80,
+    blackout_budget_s: float = 90.0,
 ) -> dict[str, tuple[str, ...]]:
     return {
         "distance_only": distance_only_route(scenario),
         "ordinary_collection": ordinary_data_collection_route(scenario),
         "protocol_aware": protocol_aware_route(scenario, blackout_weight=0.0),
-        "bounded_blackout": blackout_focused_route(scenario),
+        "bounded_blackout": bounded_blackout_route(
+            scenario,
+            budget=blackout_budget_s,
+        ),
         "genetic_algorithm": genetic_algorithm_route(
             scenario,
             blackout_weight=3.0,
@@ -51,6 +55,7 @@ def planner_rows(
     ga_generations: int = 70,
     pso_swarm_size: int = 28,
     pso_iterations: int = 80,
+    blackout_budget_s: float = 90.0,
 ) -> list[dict[str, object]]:
     rows = []
     for planner, route in planner_routes(
@@ -59,6 +64,7 @@ def planner_rows(
         ga_generations,
         pso_swarm_size,
         pso_iterations,
+        blackout_budget_s,
     ).items():
         result = simulate_route(scenario, route)
         row = {
@@ -67,6 +73,7 @@ def planner_rows(
             "total_time_s": round(result.total_time_s, 3),
             "flight_distance_m": round(result.flight_distance_m, 3),
             "success_rate": round(result.data_success_rate, 3),
+            "mission_feasible": result.mission_feasible,
             "max_blackout_s": round(result.max_blackout_s, 3),
             "wait_time_s": round(result.wait_time_s, 3),
             "service_time_s": round(result.service_time_s, 3),

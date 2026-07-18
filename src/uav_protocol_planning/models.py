@@ -17,7 +17,7 @@ class ProtocolProfile:
     awake_window_s: float
     packet_loss_at_edge: float
     switch_penalty_s: float
-    disconnect_threshold_s: float = 1.0
+    recovery_threshold_s: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -62,11 +62,15 @@ class Scenario:
     nodes: Mapping[str, IoTNode]
     radio_obstacles: Sequence[RadioObstacle]
     max_blackout_s: float = 120.0
-    disconnect_gap_s: float = 1.0
+    max_mission_time_s: float = 1500.0
 
 
 @dataclass(frozen=True)
 class VisitEstimate:
+    contact_point: Point
+    contact_distance_m: float
+    effective_range_m: float
+    expected_packet_loss: float
     travel_s: float
     wait_s: float
     setup_s: float
@@ -87,6 +91,7 @@ class SimulationState:
     current_time_s: float
     last_comm_time_s: float
     last_protocol: str | None
+    last_protocol_activity_s: Mapping[str, float]
 
 
 @dataclass(frozen=True)
@@ -97,6 +102,7 @@ class SimulationResult:
     service_time_s: float
     wait_time_s: float
     data_success_rate: float
+    mission_feasible: bool
     max_blackout_s: float
     reconnect_count: int
     protocol_switches: int

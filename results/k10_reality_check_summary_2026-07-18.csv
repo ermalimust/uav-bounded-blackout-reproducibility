@@ -1,0 +1,5 @@
+source,requests,successes,success_rate_percent,mean_latency_ms,min_latency_ms,max_latency_ms
+k10_latency_log_20260528_231959.csv,60,60,100.0,190.9,40.9,355.5
+k10_latency_log_20260528_232159.csv,300,300,100.0,197.0,39.7,358.8
+k10_distance_test_20260528_233257_raw.csv,30,30,100.0,208.2,67.1,341.1
+combined_k10_wifi_http,390,390,100.0,197.0,39.7,358.8

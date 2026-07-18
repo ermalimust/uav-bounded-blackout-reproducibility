@@ -1,12 +1,12 @@
 cff-version: 1.2.0
 message: "If you use this repository, please cite the associated paper."
 title: "Protocol-Aware Bounded-Blackout Routing for UAV-Assisted Heterogeneous IoT Sensor Networks"
-version: "0.1.1"
-date-released: "2026-07-06"
+version: "0.2.0"
+date-released: "2026-07-18"
 license: MIT
 authors:
   - family-names: "Pei"
     given-names: "Zhenzhen"
   - family-names: "Feng"
     given-names: "Li"
-    orcid: "https://orcid.org/0000-000
+    orcid: "https://orcid.org/0000-0001-6172-8650"

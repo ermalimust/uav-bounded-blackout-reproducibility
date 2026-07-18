@@ -1,0 +1,6 @@
+profile_variant,planner,scenarios,budget_violations,endurance_violations,joint_violations,total_time_s_mean,total_time_s_std,total_time_s_ci95,max_blackout_s_mean,max_blackout_s_std,max_blackout_s_ci95,mean_gap_s_mean,mean_gap_s_std,mean_gap_s_ci95,average_silence_age_s_mean,average_silence_age_s_std,average_silence_age_s_ci95,mean_collection_completion_s_mean,mean_collection_completion_s_std,mean_collection_completion_s_ci95,runtime_ms_mean,runtime_ms_std,runtime_ms_ci95
+literature_aligned,average_gap,50,19,39,41,2146.403,738.502,204.702,93.375,30.205,8.372,35.928,5.801,1.608,7.327,2.721,0.754,1078.15,434.216,120.359,836.389,206.015,57.104
+literature_aligned,bounded_beta90,50,17,39,39,2101.018,724.633,200.858,81.475,24.95,6.916,36.238,7.777,2.156,7.079,2.712,0.752,1025.985,449.351,124.554,1887.166,399.704,110.792
+literature_aligned,freshness_focused,50,45,42,48,2303.962,779.869,216.169,159.956,58.122,16.111,50.083,12.092,3.352,14.718,6.096,1.69,726.726,291.208,80.719,835.43,193.798,53.718
+literature_aligned,protocol_aware_time,50,31,39,43,2144.784,715.231,198.252,98.212,22.471,6.229,40.002,7.124,1.975,8.9,3.179,0.881,1004.033,439.491,121.821,308.827,90.449,25.071
+literature_aligned,soft_penalty_w12,50,17,40,40,2153.153,724.797,200.903,89.033,18.403,5.101,40.138,7.094,1.966,8.381,2.802,0.777,1030.232,448.092,124.205,315.549,78.915,21.874

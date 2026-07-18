@@ -6,7 +6,7 @@ from .models import IoTNode, ProtocolProfile, RadioObstacle, Scenario
 
 
 def build_default_protocols() -> dict[str, ProtocolProfile]:
-    # Sleep cycles and awake windows recalibrated to a more realistic duty-cycled
+    # Sleep cycles and awake windows set to a literature-informed duty-cycled
     # regime (cycles x2, windows x0.6) so that maximum blackout depends on the
     # visiting order, decoupling it from pure travel time.
     return {
@@ -20,7 +20,7 @@ def build_default_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=14.4,
             packet_loss_at_edge=0.12,
             switch_penalty_s=2.0,
-            disconnect_threshold_s=1.0,
+            recovery_threshold_s=1.0,
         ),
         "ZigBee": ProtocolProfile(
             name="ZigBee",
@@ -32,7 +32,7 @@ def build_default_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=12.0,
             packet_loss_at_edge=0.08,
             switch_penalty_s=1.4,
-            disconnect_threshold_s=7.5,
+            recovery_threshold_s=7.5,
         ),
         "BLE": ProtocolProfile(
             name="BLE",
@@ -44,7 +44,7 @@ def build_default_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=9.6,
             packet_loss_at_edge=0.07,
             switch_penalty_s=1.6,
-            disconnect_threshold_s=6.0,
+            recovery_threshold_s=6.0,
         ),
         "WiFi": ProtocolProfile(
             name="WiFi",
@@ -56,7 +56,7 @@ def build_default_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=25.2,
             packet_loss_at_edge=0.05,
             switch_penalty_s=1.2,
-            disconnect_threshold_s=5.0,
+            recovery_threshold_s=5.0,
         ),
     }
 
@@ -65,7 +65,7 @@ def build_literature_aligned_protocols() -> dict[str, ProtocolProfile]:
     """Alternative profile used only for robustness checks.
 
     These values form a conservative, literature-aligned envelope rather than a
-    hardware calibration. The profile keeps LoRa long-range but low-rate, uses a
+    fitted hardware-specific model. The profile keeps LoRa long-range but low-rate, uses a
     nominal IEEE 802.15.4/ZigBee data-rate scale, keeps BLE short-range and
     connection-sensitive, and keeps WiFi high-rate but range-limited.
     """
@@ -80,7 +80,7 @@ def build_literature_aligned_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=12.0,
             packet_loss_at_edge=0.16,
             switch_penalty_s=2.2,
-            disconnect_threshold_s=1.0,
+            recovery_threshold_s=1.0,
         ),
         "ZigBee": ProtocolProfile(
             name="ZigBee",
@@ -92,7 +92,7 @@ def build_literature_aligned_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=15.0,
             packet_loss_at_edge=0.10,
             switch_penalty_s=1.4,
-            disconnect_threshold_s=10.0,
+            recovery_threshold_s=10.0,
         ),
         "BLE": ProtocolProfile(
             name="BLE",
@@ -104,7 +104,7 @@ def build_literature_aligned_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=10.0,
             packet_loss_at_edge=0.08,
             switch_penalty_s=1.5,
-            disconnect_threshold_s=6.0,
+            recovery_threshold_s=6.0,
         ),
         "WiFi": ProtocolProfile(
             name="WiFi",
@@ -116,13 +116,13 @@ def build_literature_aligned_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=30.0,
             packet_loss_at_edge=0.06,
             switch_penalty_s=1.2,
-            disconnect_threshold_s=5.0,
+            recovery_threshold_s=5.0,
         ),
     }
 
 
-def build_public_trace_calibrated_protocols() -> dict[str, ProtocolProfile]:
-    """Profile used for the public measurement-trace calibration rerun.
+def build_public_measurement_informed_protocols() -> dict[str, ProtocolProfile]:
+    """Profile used for the public-measurement-informed envelope rerun.
 
     This is not a closed-loop UAV deployment profile. It keeps the scheduler
     interface unchanged while replacing the reference envelope with values
@@ -142,7 +142,7 @@ def build_public_trace_calibrated_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=12.0,
             packet_loss_at_edge=0.18,
             switch_penalty_s=2.2,
-            disconnect_threshold_s=1.0,
+            recovery_threshold_s=1.0,
         ),
         "ZigBee": ProtocolProfile(
             name="ZigBee",
@@ -154,7 +154,7 @@ def build_public_trace_calibrated_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=15.0,
             packet_loss_at_edge=0.14,
             switch_penalty_s=1.4,
-            disconnect_threshold_s=10.0,
+            recovery_threshold_s=10.0,
         ),
         "BLE": ProtocolProfile(
             name="BLE",
@@ -166,7 +166,7 @@ def build_public_trace_calibrated_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=10.0,
             packet_loss_at_edge=0.10,
             switch_penalty_s=1.5,
-            disconnect_threshold_s=6.0,
+            recovery_threshold_s=6.0,
         ),
         "WiFi": ProtocolProfile(
             name="WiFi",
@@ -178,7 +178,7 @@ def build_public_trace_calibrated_protocols() -> dict[str, ProtocolProfile]:
             awake_window_s=30.0,
             packet_loss_at_edge=0.06,
             switch_penalty_s=1.2,
-            disconnect_threshold_s=5.0,
+            recovery_threshold_s=5.0,
         ),
     }
 
@@ -188,8 +188,8 @@ def _select_protocols(profile_variant: str) -> dict[str, ProtocolProfile]:
         return build_default_protocols()
     if profile_variant == "literature_aligned":
         return build_literature_aligned_protocols()
-    if profile_variant == "public_trace_calibrated":
-        return build_public_trace_calibrated_protocols()
+    if profile_variant == "public_measurement_informed":
+        return build_public_measurement_informed_protocols()
     raise ValueError(f"Unknown protocol profile variant: {profile_variant}")
 
 
@@ -246,7 +246,7 @@ def build_reference_scenario(profile_variant: str = "reference") -> Scenario:
         nodes=nodes,
         radio_obstacles=radio_obstacles,
         max_blackout_s=120.0,
-        disconnect_gap_s=1.0,
+        max_mission_time_s=1500.0,
     )
 
 
@@ -307,7 +307,7 @@ def build_random_scenario(
         nodes=nodes,
         radio_obstacles=radio_obstacles,
         max_blackout_s=120.0,
-        disconnect_gap_s=1.0,
+        max_mission_time_s=1500.0,
     )
 
 

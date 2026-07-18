@@ -1,0 +1,8 @@
+planner,scenarios,budget_violations,endurance_violations,joint_violations,total_time_s_mean,total_time_s_std,max_blackout_s_mean,max_blackout_s_std,mean_gap_s_mean,mean_gap_s_std,average_silence_age_s_mean,average_silence_age_s_std,mean_collection_completion_s_mean,mean_collection_completion_s_std,runtime_ms_mean,runtime_ms_std
+distance_only,50,47,26,47,1563.68,379.819,162.352,48.743,64.715,15.5,29.273,8.681,816.969,236.179,0.026,0.002
+ordinary_collection,50,48,27,48,1544.249,332.783,169.963,41.979,63.27,13.349,29.484,7.236,824.147,202.372,13.821,4.296
+protocol_aware_time,50,22,2,23,1133.389,215.226,89.236,22.985,35.592,5.729,12.641,3.559,560.353,140.101,287.099,82.506
+soft_penalty_w12,50,0,2,2,1150.041,214.0,76.487,9.658,36.559,5.0,12.047,2.716,574.678,139.942,314.794,91.369
+average_gap,50,16,2,18,1118.591,207.867,85.316,19.152,33.733,4.616,11.583,3.339,577.943,137.323,775.31,169.501
+freshness_focused,50,32,5,33,1210.372,251.628,115.239,48.229,40.727,7.596,16.844,6.918,469.513,106.576,800.807,177.641
+bounded_beta90,50,1,2,2,1084.915,216.487,63.808,13.434,31.95,5.213,9.723,2.868,542.494,131.469,1763.133,341.11

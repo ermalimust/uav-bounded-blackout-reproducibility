@@ -1,0 +1,5 @@
+protocol,range_m,rate_kbps,setup_s,reconnect_s,recovery_threshold_s,cycle_window_s,edge_loss,switch_s,evidence_status,evidence_note
+LoRa,650.0,5.5,2.0,1.5,1.0,300/12,0.18,2.2,public aerial measurement informed,"Real-UAV LoRa/LoRaWAN public measurements for range, edge reliability, and aerial link variability; packet-capture LoRaWAN studies for low-rate and loss envelope."
+ZigBee,110.0,250.0,0.7,0.8,10.0,120/15,0.14,1.4,public aerial measurement informed,Real-UAV 2.4 GHz IEEE 802.15.4 measurements for aerial edge loss and range collapse; XBee/802.15.4 studies for nominal rate and recovery.
+BLE,45.0,100.0,0.6,1.0,6.0,80/10,0.1,1.5,measurement and standard informed,Real-chipset BLE discovery/reconnect studies and RSSI-distance datasets; no public aerial BLE dataset was used.
+WiFi,100.0,1000.0,0.6,0.8,5.0,120/30,0.06,1.2,bench and standard informed,K10 Wi-Fi bench measurements for service-time scale plus conservative short-range edge-loss assumptions; no public aerial Wi-Fi IoT dataset was used.

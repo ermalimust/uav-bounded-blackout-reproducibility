@@ -17,7 +17,7 @@ def distance_only_route(scenario: Scenario) -> Tuple[str, ...]:
     while remaining:
         next_id = min(
             remaining,
-            key=lambda node_id: distance_m(current_point, scenario.nodes[node_id].point),
+            key=lambda node_id: (distance_m(current_point, scenario.nodes[node_id].point), node_id),
         )
         route.append(next_id)
         current_point = scenario.nodes[next_id].point
@@ -26,7 +26,10 @@ def distance_only_route(scenario: Scenario) -> Tuple[str, ...]:
     return tuple(route)
 
 
-def ordinary_data_collection_route(scenario: Scenario) -> Tuple[str, ...]:
+def ordinary_data_collection_route(
+    scenario: Scenario,
+    max_passes: int = 30,
+) -> Tuple[str, ...]:
     remaining: Set[str] = set(scenario.nodes)
     current_point = scenario.start
     route: List[str] = []
@@ -34,15 +37,18 @@ def ordinary_data_collection_route(scenario: Scenario) -> Tuple[str, ...]:
     while remaining:
         next_id = min(
             remaining,
-            key=lambda node_id: _ordinary_visit_cost(scenario, current_point, node_id),
+            key=lambda node_id: (_ordinary_visit_cost(scenario, current_point, node_id), node_id),
         )
         route.append(next_id)
         current_point = scenario.nodes[next_id].point
         remaining.remove(next_id)
 
     seeds = {tuple(route), distance_only_route(scenario)}
-    searched = [_ordinary_local_search_route(scenario, seed) for seed in seeds]
-    return min(searched, key=lambda candidate: _ordinary_route_objective(scenario, candidate))
+    searched = [
+        _ordinary_local_search_route(scenario, seed, max_passes=max_passes)
+        for seed in seeds
+    ]
+    return min(searched, key=lambda candidate: (_ordinary_route_objective(scenario, candidate), candidate))
 
 
 def protocol_aware_route(
@@ -78,7 +84,7 @@ def protocol_aware_route(
         _local_search_route(scenario, seed, blackout_weight, max_passes=max_passes)
         for seed in seeds
     ]
-    return min(searched, key=lambda route: _route_objective(scenario, route, blackout_weight))
+    return min(searched, key=lambda route: (_route_objective(scenario, route, blackout_weight), route))
 
 
 def soft_blackout_penalty_route(
@@ -112,7 +118,7 @@ def average_gap_route(
         for seed in seeds
     }
     candidates.update(seeds)
-    return min(candidates, key=lambda route: _average_gap_objective(scenario, route))
+    return min(candidates, key=lambda route: (_average_gap_objective(scenario, route), route))
 
 
 def freshness_focused_route(
@@ -131,7 +137,7 @@ def freshness_focused_route(
         for seed in seeds
     }
     candidates.update(seeds)
-    return min(candidates, key=lambda route: _freshness_objective(scenario, route))
+    return min(candidates, key=lambda route: (_freshness_objective(scenario, route), route))
 
 
 def genetic_algorithm_route(
@@ -161,10 +167,10 @@ def genetic_algorithm_route(
         rng.shuffle(candidate)
         population.append(tuple(candidate))
 
-    best = min(population, key=lambda route: _route_objective(scenario, route, blackout_weight))
+    best = min(population, key=lambda route: (_route_objective(scenario, route, blackout_weight), route))
 
     for _ in range(generations):
-        ranked = sorted(population, key=lambda route: _route_objective(scenario, route, blackout_weight))
+        ranked = sorted(population, key=lambda route: (_route_objective(scenario, route, blackout_weight), route))
         next_population = ranked[: max(2, population_size // 5)]
         best = ranked[0] if _route_objective(scenario, ranked[0], blackout_weight) < _route_objective(scenario, best, blackout_weight) else best
 
@@ -178,7 +184,7 @@ def genetic_algorithm_route(
 
         population = next_population
 
-    best = min(population + [best], key=lambda route: _route_objective(scenario, route, blackout_weight))
+    best = min(population + [best], key=lambda route: (_route_objective(scenario, route, blackout_weight), route))
     return _local_search_route(scenario, best, blackout_weight, max_passes=18)
 
 
@@ -265,10 +271,10 @@ def genetic_algorithm_blackout_route(
         rng.shuffle(candidate)
         population.append(tuple(candidate))
 
-    best = min(population, key=lambda route: _blackout_route_objective(scenario, route))
+    best = min(population, key=lambda route: (_blackout_route_objective(scenario, route), route))
 
     for _ in range(generations):
-        ranked = sorted(population, key=lambda route: _blackout_route_objective(scenario, route))
+        ranked = sorted(population, key=lambda route: (_blackout_route_objective(scenario, route), route))
         next_population = ranked[: max(2, population_size // 5)]
         if _blackout_route_objective(scenario, ranked[0]) < _blackout_route_objective(scenario, best):
             best = ranked[0]
@@ -291,7 +297,7 @@ def genetic_algorithm_blackout_route(
 
         population = next_population
 
-    best = min(population + [best], key=lambda route: _blackout_route_objective(scenario, route))
+    best = min(population + [best], key=lambda route: (_blackout_route_objective(scenario, route), route))
     return _custom_local_search_route(
         scenario,
         best,
@@ -375,6 +381,7 @@ def q_learning_blackout_route(
     epsilon_start: float = 0.45,
     epsilon_end: float = 0.05,
     seed: int = 41,
+    repair_passes: int = 8,
 ) -> Tuple[str, ...]:
     """Learning-style baseline for route ordering.
 
@@ -461,16 +468,14 @@ def q_learning_blackout_route(
             current_index = action_index
 
     route = _q_learning_greedy_route(scenario, node_ids, q_values, budget)
-    candidates = {
+    if repair_passes <= 0:
+        return route
+    return _custom_local_search_route(
+        scenario,
         route,
-        _custom_local_search_route(
-            scenario,
-            route,
-            _blackout_route_objective,
-            max_passes=8,
-        ),
-    }
-    return min(candidates, key=lambda candidate: _blackout_route_objective(scenario, candidate))
+        _blackout_route_objective,
+        max_passes=repair_passes,
+    )
 
 
 def neural_q_blackout_route(
@@ -485,6 +490,7 @@ def neural_q_blackout_route(
     replay_capacity: int = 5000,
     batch_size: int = 16,
     seed: int = 53,
+    repair_passes: int = 12,
 ) -> Tuple[str, ...]:
     """DQN-style learning comparator using a small neural action-value model.
 
@@ -628,16 +634,220 @@ def neural_q_blackout_route(
 
     target_weights = {key: value.copy() for key, value in weights.items()}
     route = _neural_q_greedy_route(scenario, node_ids, weights, features, forward)
-    candidates = {
+    if repair_passes <= 0:
+        return route
+    return _custom_local_search_route(
+        scenario,
         route,
-        _custom_local_search_route(
-            scenario,
-            route,
-            _blackout_route_objective,
-            max_passes=12,
-        ),
+        _blackout_route_objective,
+        max_passes=repair_passes,
+    )
+
+
+def action_masked_ppo_route(
+    scenario: Scenario,
+    budget: float = 90.0,
+    episodes: int = 360,
+    hidden_size: int = 24,
+    policy_learning_rate: float = 0.0025,
+    value_learning_rate: float = 0.012,
+    discount: float = 0.98,
+    clip_ratio: float = 0.20,
+    update_epochs: int = 3,
+    seed: int = 71,
+    repair_passes: int = 0,
+) -> Tuple[str, ...]:
+    """Action-masked PPO comparator for the next-node scheduling problem.
+
+    The implementation adapts the recent single-UAV maximum-revisit PPO design
+    to a one-visit collection mission: visited nodes are masked, the actor
+    scores the remaining nodes, and all transitions use the common protocol and
+    blackout evaluator. ``repair_passes=0`` reports the learned policy itself;
+    a positive value exposes a separately identified PPO+local-search hybrid.
+    """
+    import numpy as np
+
+    rng = random.Random(seed)
+    np_rng = np.random.default_rng(seed)
+    node_ids = tuple(scenario.nodes)
+    protocol_ids = tuple(sorted(scenario.protocols))
+    protocol_index = {name: index for index, name in enumerate(protocol_ids)}
+    all_mask = (1 << len(node_ids)) - 1
+    actor_input_dim = 19 + len(protocol_ids)
+    critic_input_dim = 8
+
+    actor = {
+        "w1": np_rng.normal(0.0, 0.08, size=(actor_input_dim, hidden_size)),
+        "b1": np.zeros(hidden_size),
+        "w2": np_rng.normal(0.0, 0.06, size=(hidden_size,)),
+        "b2": 0.0,
     }
-    return min(candidates, key=lambda candidate: _blackout_route_objective(scenario, candidate))
+    value_w = np.zeros(critic_input_dim)
+    value_b = 0.0
+
+    def actor_features(mask: int, state, action_index: int) -> np.ndarray:
+        node = scenario.nodes[node_ids[action_index]]
+        estimate = estimate_visit(scenario, state, node)
+        visited_fraction = int(mask.bit_count()) / max(1, len(node_ids))
+        current_gap_s = state.current_time_s - state.last_comm_time_s
+        values = [
+            visited_fraction,
+            1.0 - visited_fraction,
+            state.current_time_s / max(1.0, scenario.max_mission_time_s),
+            current_gap_s / max(1.0, budget),
+            state.current_point[0] / max(1.0, scenario.width_m),
+            state.current_point[1] / max(1.0, scenario.height_m),
+            node.x_m / max(1.0, scenario.width_m),
+            node.y_m / max(1.0, scenario.height_m),
+            estimate.travel_s / 150.0,
+            estimate.wait_s / 300.0,
+            estimate.setup_s / 20.0,
+            estimate.switch_s / 10.0,
+            estimate.transfer_s / 300.0,
+            estimate.communication_gap_s / max(1.0, budget),
+            max(0.0, estimate.communication_gap_s - budget) / max(1.0, budget),
+            estimate.contact_distance_m / max(1.0, estimate.effective_range_m),
+            estimate.expected_packet_loss,
+            node.data_kb / 1200.0,
+            node.priority / 2.0,
+        ]
+        one_hot = [0.0] * len(protocol_ids)
+        one_hot[protocol_index[node.protocol]] = 1.0
+        return np.asarray(values + one_hot, dtype=float)
+
+    def critic_features(mask: int, state) -> np.ndarray:
+        visited_fraction = int(mask.bit_count()) / max(1, len(node_ids))
+        current_gap_s = state.current_time_s - state.last_comm_time_s
+        return np.asarray(
+            [
+                1.0,
+                visited_fraction,
+                1.0 - visited_fraction,
+                state.current_time_s / max(1.0, scenario.max_mission_time_s),
+                current_gap_s / max(1.0, budget),
+                state.current_point[0] / max(1.0, scenario.width_m),
+                state.current_point[1] / max(1.0, scenario.height_m),
+                float(state.last_protocol is not None),
+            ],
+            dtype=float,
+        )
+
+    def forward_actor(batch: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        pre_activation = batch @ actor["w1"] + actor["b1"]
+        hidden = np.maximum(0.0, pre_activation)
+        scores = hidden @ actor["w2"] + actor["b2"]
+        scores = scores - float(np.max(scores))
+        probabilities = np.exp(scores)
+        probabilities /= float(np.sum(probabilities))
+        return probabilities, hidden, pre_activation
+
+    def step_reward(estimate, next_state, done: bool) -> float:
+        overrun_s = max(0.0, estimate.communication_gap_s - budget)
+        cost = estimate.total_s + 0.20 * estimate.communication_gap_s + 7.0 * overrun_s
+        if done:
+            return_gap_s = distance_m(next_state.current_point, scenario.start) / scenario.speed_mps
+            cost += return_gap_s + 7.0 * max(0.0, return_gap_s - budget)
+            total_with_return_s = next_state.current_time_s + return_gap_s
+            cost += 2.0 * max(0.0, total_with_return_s - scenario.max_mission_time_s)
+        return -cost / 200.0
+
+    for _ in range(max(1, episodes)):
+        state = initial_state(scenario)
+        mask = 0
+        trajectory = []
+
+        while mask != all_mask:
+            valid = [index for index in range(len(node_ids)) if not (mask & (1 << index))]
+            batch = np.vstack([actor_features(mask, state, index) for index in valid])
+            probabilities, _, _ = forward_actor(batch)
+            chosen_local = int(np_rng.choice(len(valid), p=probabilities))
+            action_index = valid[chosen_local]
+            old_log_probability = float(np.log(max(1e-12, probabilities[chosen_local])))
+            value_features = critic_features(mask, state)
+            value = float(value_features @ value_w + value_b)
+
+            next_state, estimate = advance_state(
+                scenario,
+                state,
+                scenario.nodes[node_ids[action_index]],
+            )
+            next_mask = mask | (1 << action_index)
+            done = next_mask == all_mask
+            trajectory.append(
+                (mask, state, tuple(valid), chosen_local, old_log_probability,
+                 step_reward(estimate, next_state, done), value_features, value)
+            )
+            state = next_state
+            mask = next_mask
+
+        returns = []
+        running_return = 0.0
+        for item in reversed(trajectory):
+            running_return = item[5] + discount * running_return
+            returns.append(running_return)
+        returns.reverse()
+        advantages = np.asarray([ret - item[7] for ret, item in zip(returns, trajectory)])
+        if len(advantages) > 1:
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        order = list(range(len(trajectory)))
+        for _ in range(max(1, update_epochs)):
+            rng.shuffle(order)
+            for position in order:
+                mask, stored_state, valid, chosen_local, old_log_probability, _, value_features, _ = trajectory[position]
+                batch = np.vstack([actor_features(mask, stored_state, index) for index in valid])
+                probabilities, hidden, pre_activation = forward_actor(batch)
+                new_log_probability = float(np.log(max(1e-12, probabilities[chosen_local])))
+                ratio = float(np.exp(new_log_probability - old_log_probability))
+                advantage = float(advantages[position])
+                clipped = (advantage >= 0.0 and ratio > 1.0 + clip_ratio) or (
+                    advantage < 0.0 and ratio < 1.0 - clip_ratio
+                )
+
+                if not clipped:
+                    score_gradient = -probabilities
+                    score_gradient[chosen_local] += 1.0
+                    score_gradient *= advantage * ratio
+                    grad_w2 = hidden.T @ score_gradient
+                    grad_b2 = float(np.sum(score_gradient))
+                    grad_hidden = np.outer(score_gradient, actor["w2"])
+                    grad_hidden[pre_activation <= 0.0] = 0.0
+                    grad_w1 = batch.T @ grad_hidden
+                    grad_b1 = grad_hidden.sum(axis=0)
+                    for gradient in (grad_w1, grad_b1, grad_w2):
+                        np.clip(gradient, -5.0, 5.0, out=gradient)
+                    actor["w1"] += policy_learning_rate * grad_w1
+                    actor["b1"] += policy_learning_rate * grad_b1
+                    actor["w2"] += policy_learning_rate * grad_w2
+                    actor["b2"] += policy_learning_rate * max(-5.0, min(5.0, grad_b2))
+
+                predicted_value = float(value_features @ value_w + value_b)
+                value_error = float(returns[position] - predicted_value)
+                value_w += value_learning_rate * max(-5.0, min(5.0, value_error)) * value_features
+                value_b += value_learning_rate * max(-5.0, min(5.0, value_error))
+
+    state = initial_state(scenario)
+    mask = 0
+    route: list[str] = []
+    while mask != all_mask:
+        valid = [index for index in range(len(node_ids)) if not (mask & (1 << index))]
+        batch = np.vstack([actor_features(mask, state, index) for index in valid])
+        probabilities, _, _ = forward_actor(batch)
+        chosen_local = max(range(len(valid)), key=lambda index: (probabilities[index], -valid[index]))
+        action_index = valid[chosen_local]
+        route.append(node_ids[action_index])
+        state, _ = advance_state(scenario, state, scenario.nodes[node_ids[action_index]])
+        mask |= 1 << action_index
+
+    learned_route = tuple(route)
+    if repair_passes <= 0:
+        return learned_route
+    return _custom_local_search_route(
+        scenario,
+        learned_route,
+        _blackout_route_objective,
+        max_passes=repair_passes,
+    )
 
 
 def _neural_q_greedy_route(
@@ -769,7 +979,7 @@ def _tournament_select(
     tournament_size: int = 4,
 ) -> Tuple[str, ...]:
     competitors = rng.sample(population, k=min(tournament_size, len(population)))
-    return min(competitors, key=lambda route: _route_objective(scenario, route, blackout_weight))
+    return min(competitors, key=lambda route: (_route_objective(scenario, route, blackout_weight), route))
 
 
 def _tournament_select_custom(
@@ -779,7 +989,7 @@ def _tournament_select_custom(
     tournament_size: int = 4,
 ) -> Tuple[str, ...]:
     competitors = rng.sample(population, k=min(tournament_size, len(population)))
-    return min(competitors, key=objective)
+    return min(competitors, key=lambda route: (objective(route), route))
 
 
 def _ordered_crossover(
@@ -812,12 +1022,21 @@ def _mutate_swap(rng: random.Random, route: Tuple[str, ...]) -> Tuple[str, ...]:
 def _route_objective(scenario: Scenario, route: Iterable[str], blackout_weight: float) -> float:
     result = simulate_route(scenario, route)
     blackout_overrun_s = max(0.0, result.max_blackout_s - scenario.max_blackout_s)
-    return result.total_time_s + blackout_weight * blackout_overrun_s
+    endurance_overrun_s = max(0.0, result.total_time_s - scenario.max_mission_time_s)
+    return (
+        result.total_time_s
+        + blackout_weight * blackout_overrun_s
+        + 1000.0 * endurance_overrun_s
+    )
 
 
-def _blackout_route_objective(scenario: Scenario, route: Iterable[str]) -> Tuple[float, float]:
+def _blackout_route_objective(
+    scenario: Scenario, route: Iterable[str]
+) -> Tuple[int, float, float, float]:
     result = simulate_route(scenario, route)
     return (
+        0 if result.mission_feasible else 1,
+        round(max(0.0, result.total_time_s - scenario.max_mission_time_s), 6),
         round(result.max_blackout_s, 6),
         round(result.total_time_s, 6),
     )
@@ -998,7 +1217,7 @@ def blackout_focused_route(
 
     def key(route: Tuple[str, ...]):
         result = simulate_route(scenario, route)
-        return (round(result.max_blackout_s, 3), round(result.total_time_s, 3))
+        return (round(result.max_blackout_s, 3), round(result.total_time_s, 3), route)
 
     return min(candidates, key=key)
 
@@ -1010,13 +1229,13 @@ def bounded_blackout_route(
     seed_max_passes: int = 30,
 ) -> Tuple[str, ...]:
     """Constrained bounded-blackout planner: among a pool of candidate routes,
-    return the fastest route whose maximum blackout is within ``budget``. If no
-    candidate meets the budget, return the route with the smallest maximum
-    blackout. The hard budget is enforced within the evaluated candidate pool,
-    unlike a soft penalty, but this is not a global feasibility guarantee."""
+    return the fastest endurance-feasible route whose maximum blackout is within
+    ``budget``. If no candidate meets both constraints, prefer the
+    endurance-feasible route with the smallest maximum blackout. The hard
+    constraints are enforced within the evaluated candidate pool."""
     pool = {
         distance_only_route(scenario),
-        ordinary_data_collection_route(scenario),
+        ordinary_data_collection_route(scenario, max_passes=seed_max_passes),
         protocol_aware_route(scenario, blackout_weight=0.0, max_passes=seed_max_passes),
         protocol_aware_route(scenario, blackout_weight=3.0, max_passes=seed_max_passes),
         protocol_aware_route(scenario, blackout_weight=12.0, max_passes=seed_max_passes),
@@ -1029,11 +1248,14 @@ def bounded_blackout_route(
     scored = []
     for route in pool:
         result = simulate_route(scenario, route)
-        scored.append((result.max_blackout_s, result.total_time_s, route))
+        scored.append((result.max_blackout_s, result.total_time_s, result.mission_feasible, route))
 
-    feasible = [s for s in scored if s[0] <= budget + 1e-6]
+    feasible = [s for s in scored if s[0] <= budget + 1e-6 and s[2]]
     if feasible:
-        # fastest route that meets the blackout budget
-        return min(feasible, key=lambda s: (s[1], s[0]))[2]
-    # infeasible budget: smallest achievable blackout (then fastest)
-    return min(scored, key=lambda s: (s[0], s[1]))[2]
+        return min(feasible, key=lambda s: (s[1], s[0], s[3]))[3]
+
+    endurance_feasible = [s for s in scored if s[2]]
+    if endurance_feasible:
+        return min(endurance_feasible, key=lambda s: (s[0], s[1], s[3]))[3]
+
+    return min(scored, key=lambda s: (s[1], s[0], s[3]))[3]

@@ -2,15 +2,15 @@
 
 This package uses public measurement evidence to set scheduler-visible protocol-profile fields. The external datasets and papers should be accessed from their original repositories, DOIs, or source pages. Raw third-party datasets are not redistributed in this repository.
 
-## Calibration Role
+## Measurement-Informed Profile Role
 
-The calibration maps reported measurement envelopes into routing-simulator inputs:
+The diagnostic profiles map reported measurement envelopes into routing-simulator inputs:
 
 - reported PDR/range envelopes inform the nominal contact range;
 - residual near-edge non-delivery is represented as the edge-loss term;
-- setup, reconnect, and timing fields use measurement studies, protocol semantics, or local bench-scale checks where public aerial data are unavailable.
+- setup, reconnect, and timing fields use scheduler assumptions informed by measurement studies, protocol semantics, or local bench-scale checks where public aerial data are unavailable.
 
-These mappings are conservative profile inputs for a route evaluator. They are not fitted deployment models and do not constitute closed-loop UAV validation.
+These mappings are profile inputs for a route evaluator. They are not fitted deployment models, do not uniquely identify every numerical constant, and do not constitute closed-loop UAV validation.
 
 ## LoRa and LoRaWAN Sources
 
@@ -38,8 +38,8 @@ Used fields:
 
 ## BLE and Wi-Fi Fields
 
-No public aerial BLE or Wi-Fi IoT dataset was used. These fields are bounded by ground measurement studies, standard protocol semantics, and local bench-scale service-time checks. They are included so that the heterogeneous profile remains complete, but the public aerial calibration claim is limited to LoRa and ZigBee-class inputs.
+No public aerial BLE or Wi-Fi IoT dataset was used. These fields are bounded by ground measurement studies, standard protocol semantics, and local bench-scale service-time checks. They are included so that the heterogeneous profile remains complete; the externally grounded aerial evidence is limited to the LoRa and ZigBee-class envelopes.
 
 ## Reproducibility Note
 
-The checked-in CSV files record the calibrated protocol table and the resulting route metrics. The script `experiments/run_public_trace_calibration.py` regenerates those outputs from the profile values embedded in `src/uav_protocol_planning/scenarios.py`.
+The checked-in CSV files record the measurement-informed protocol table and the resulting route metrics. The script `experiments/run_public_measurement_profile.py` regenerates the public-measurement profile outputs from the values embedded in `src/uav_protocol_planning/scenarios.py`.

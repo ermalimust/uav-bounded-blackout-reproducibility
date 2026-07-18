@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List, Tuple
 
-from .geometry import distance_m, inside_obstacle
+from .geometry import contact_point_on_segment, distance_m, inside_obstacle
 from .models import IoTNode, Scenario, SimulationResult, SimulationState, VisitEstimate
 
 
@@ -50,17 +50,25 @@ def initial_state(scenario: Scenario) -> SimulationState:
         current_time_s=0.0,
         last_comm_time_s=0.0,
         last_protocol=None,
+        last_protocol_activity_s={name: 0.0 for name in scenario.protocols},
     )
 
 
 def estimate_visit(scenario: Scenario, state: SimulationState, node: IoTNode) -> VisitEstimate:
     protocol = scenario.protocols[node.protocol]
-    travel_s = distance_m(state.current_point, node.point) / scenario.speed_mps
+    range_factor, rate_factor, loss_addition, hit_count = _radio_modifiers(node, scenario)
+    effective_range_m = max(0.01, protocol.nominal_range_m * range_factor)
+    contact_point = contact_point_on_segment(state.current_point, node.point, effective_range_m)
+    travel_s = distance_m(state.current_point, contact_point) / scenario.speed_mps
     arrival_s = state.current_time_s + travel_s
     wait_s = wait_until_awake(arrival_s, node, scenario)
 
-    _, rate_factor, loss_addition, hit_count = _radio_modifiers(node, scenario)
-    packet_loss = min(0.92, max(0.0, protocol.packet_loss_at_edge * 0.35 + loss_addition))
+    contact_distance_m = distance_m(contact_point, node.point)
+    normalized_distance = min(1.0, contact_distance_m / effective_range_m)
+    packet_loss = min(
+        0.92,
+        max(0.0, protocol.packet_loss_at_edge * normalized_distance**2 + loss_addition),
+    )
     effective_rate_kb_s = max(0.01, (protocol.data_rate_kbps / 8.0) * rate_factor * (1.0 - packet_loss))
 
     switch_s = 0.0
@@ -68,8 +76,9 @@ def estimate_visit(scenario: Scenario, state: SimulationState, node: IoTNode) ->
         switch_s = protocol.switch_penalty_s
 
     gap_before_setup_s = arrival_s + wait_s - state.last_comm_time_s
+    protocol_idle_s = arrival_s + wait_s - state.last_protocol_activity_s[protocol.name]
     setup_s = protocol.connection_setup_s
-    reconnected = gap_before_setup_s > protocol.disconnect_threshold_s
+    reconnected = protocol_idle_s > protocol.recovery_threshold_s
     if reconnected:
         setup_s += protocol.reconnect_penalty_s
 
@@ -77,6 +86,10 @@ def estimate_visit(scenario: Scenario, state: SimulationState, node: IoTNode) ->
     transfer_s = node.data_kb / effective_rate_kb_s
 
     return VisitEstimate(
+        contact_point=contact_point,
+        contact_distance_m=contact_distance_m,
+        effective_range_m=effective_range_m,
+        expected_packet_loss=packet_loss,
         travel_s=travel_s,
         wait_s=wait_s,
         setup_s=setup_s,
@@ -93,11 +106,14 @@ def advance_state(
 ) -> Tuple[SimulationState, VisitEstimate]:
     estimate = estimate_visit(scenario, state, node)
     next_time_s = state.current_time_s + estimate.total_s
+    last_protocol_activity_s = dict(state.last_protocol_activity_s)
+    last_protocol_activity_s[node.protocol] = next_time_s
     next_state = SimulationState(
-        current_point=node.point,
+        current_point=estimate.contact_point,
         current_time_s=next_time_s,
         last_comm_time_s=next_time_s,
         last_protocol=scenario.protocols[node.protocol].name,
+        last_protocol_activity_s=last_protocol_activity_s,
     )
     return next_state, estimate
 
@@ -139,14 +155,18 @@ def simulate_route(scenario: Scenario, route: Iterable[str]) -> SimulationResult
                 "node": node_id,
                 "protocol": node.protocol,
                 "arrival_s": round(previous_state.current_time_s + estimate.travel_s, 3),
+                "contact_point": tuple(round(value, 3) for value in estimate.contact_point),
+                "contact_distance_m": round(estimate.contact_distance_m, 3),
+                "effective_range_m": round(estimate.effective_range_m, 3),
+                "expected_packet_loss": round(estimate.expected_packet_loss, 4),
                 "wait_s": round(estimate.wait_s, 3),
                 "setup_s": round(estimate.setup_s, 3),
                 "switch_s": round(estimate.switch_s, 3),
                 "transfer_s": round(estimate.transfer_s, 3),
                 "completion_s": round(state.current_time_s, 3),
                 "communication_gap_s": round(estimate.communication_gap_s, 3),
-                "disconnect_threshold_s": round(
-                    scenario.protocols[node.protocol].disconnect_threshold_s, 3
+                "recovery_threshold_s": round(
+                    scenario.protocols[node.protocol].recovery_threshold_s, 3
                 ),
                 "reconnected": estimate.reconnected,
                 "radio_obstacles": active_radio_obstacles(node, scenario),
@@ -160,6 +180,7 @@ def simulate_route(scenario: Scenario, route: Iterable[str]) -> SimulationResult
 
     node_count = len(scenario.nodes)
     data_success_rate = len(collected) / node_count if node_count else 1.0
+    mission_feasible = total_time_s <= scenario.max_mission_time_s
 
     return SimulationResult(
         route=route_tuple,
@@ -168,6 +189,7 @@ def simulate_route(scenario: Scenario, route: Iterable[str]) -> SimulationResult
         service_time_s=service_time_s,
         wait_time_s=wait_time_s,
         data_success_rate=data_success_rate,
+        mission_feasible=mission_feasible,
         max_blackout_s=max_blackout_s,
         reconnect_count=reconnect_count,
         protocol_switches=protocol_switches,
