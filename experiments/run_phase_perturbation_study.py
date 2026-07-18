@@ -126,6 +126,10 @@ def _summarize(raw_rows: list[dict[str, object]]) -> list[dict[str, object]]:
                 "scenarios": len(group),
                 "violations_90s": sum(1 - int(row["meets_90s_budget"]) for row in group),
                 "endurance_violations": sum(1 - int(row["mission_feasible"]) for row in group),
+                "joint_violations": sum(
+                    not int(row["meets_90s_budget"]) or not int(row["mission_feasible"])
+                    for row in group
+                ),
             }
             for key in ("total_time_s", "flight_distance_m", "max_blackout_s", "planning_runtime_ms"):
                 values = [float(row[key]) for row in group]
@@ -153,6 +157,7 @@ def _write_markdown(summary: list[dict[str, object]], path: Path) -> None:
                 ("Max blackout 95% CI", "max_blackout_s_ci95"),
                 ("90s violations", "violations_90s"),
                 ("Endurance violations", "endurance_violations"),
+                ("Joint violations", "joint_violations"),
                 ("Planning runtime ms", "planning_runtime_ms_mean"),
             ],
         ),
